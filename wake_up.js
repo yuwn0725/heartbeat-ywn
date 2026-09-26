@@ -510,10 +510,11 @@ ${historyText}`
   }
 
   const rawAiText = normalizeContentToText(data.choices?.[0]?.message?.content).trim();
+  const strippedAiText = rawAiText.replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
   console.log("\nWake Result Summary:\n");
   console.log(JSON.stringify({ choices: Array.isArray(data.choices) ? data.choices.length : 0, ai_text_chars: rawAiText.length }));
 
-  const diaryResult = extractDiaryFromResponse(rawAiText);
+  const diaryResult = extractDiaryFromResponse(strippedAiText);
   const diarySaved = appendDiaryEntry(diaryResult.diaryContent);
   const aiText = diaryResult.remainingText;
 
@@ -563,7 +564,7 @@ ${historyText}`
       console.log("\n推送内容清洗后为空，本次不发送推送\n");
       eventContent = `（${getLocalTimeString()} 自动唤醒：本次未发送推送｜原因：推送内容为空）`;
     } else if (lines.length === 1) {
-      title = "来自AI";
+      title = process.env.AI_DISPLAY_NAME || "克克";
       body = lines[0].trim();
     } else if (lines.length === 2) {
       title = lines[0].trim();
@@ -578,7 +579,9 @@ ${historyText}`
       // 保护：截断过长正文，兼容 Bark 和 ntfy 的移动端展示。
       const safeBody = body.length > 500 ? body.substring(0, 497) + "..." : body;
       // 若标题为空或以数字开头，加个前缀，可自行修改
-      let safeTitle = title || "来自伴侣";
+      const fallbackName = process.env.AI_DISPLAY_NAME || "克克";
+let safeTitle = title || fallbackName;
+if (/^\d/.test(safeTitle)) safeTitle = fallbackName + "｜" + safeTitle;
       if (/^\d/.test(safeTitle)) safeTitle = "来自伴侣｜" + safeTitle;
 
       const pushResult = await sendPushNotification({ title: safeTitle, body: safeBody });
