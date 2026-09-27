@@ -294,7 +294,33 @@ async function fetchWeatherContext() {
     clearTimeout(timeout);
   }
 }
+async function fetchPhoneActivity() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return "";
 
+  try {
+    const url = `${supabaseUrl}/rest/v1/phone_activity?select=*&order=opened_at.desc&limit=10&apikey=${supabaseKey}`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(5000),
+      headers: { "apikey": supabaseKey }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) return "";
+
+    const lines = ["## 用户最近手机使用记录（kekemonitor）"];
+    for (const row of data) {
+      lines.push(`- ${row.opened_at}  ${row.app_name}`);
+    }
+    lines.push("");
+    lines.push("根据以上记录，你可以判断用户在做什么、有没有熬夜刷手机等，据此决定是否查岗。");
+    return lines.join("\n");
+  } catch (err) {
+    console.log("查询手机活动失败:", err.message);
+    return "";
+  }
+}
 function loadTimelineMessages() {
   if (!fs.existsSync(TIMELINE_PATH)) {
     console.log("未找到 enhanced_messages.json");
@@ -422,7 +448,9 @@ async function runWakeUp() {
   }
 
   const weatherContext = await fetchWeatherContext();
-  const wakePrompt = buildWakePrompt(getChinaTimeString(), diffMinutes, weatherContext);
+const phoneActivity = await fetchPhoneActivity();
+const extraContext = [weatherContext, phoneActivity].filter(Boolean).join("\n\n");
+const wakePrompt = buildWakePrompt(getChinaTimeString(), diffMinutes, extraContext);
   const cleanMessages = stripPosition(messages);
 
   const historyText = cleanMessages
